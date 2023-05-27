@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mohaali482/todo/pkg/errors"
@@ -16,12 +17,27 @@ type TodoController struct {
 
 func (t *TodoController) GetAllTodos(c *gin.Context) {
 	var todos []models.Todo
-	result := t.DB.Find(&todos)
+	pagination := helpers.Pagination{}
+	limit, e := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if e != nil {
+		limit = 10
+	}
+	page, e := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if e != nil {
+		page = 1
+	}
+	pagination.Limit = limit
+	pagination.Page = page
+
+	// result := t.DB.Find(&todos)
+	result := t.DB.Scopes(helpers.Paginate(todos, &pagination, t.DB)).Find(&todos)
+
 	if result.Error != nil {
 		c.AbortWithError(http.StatusNotFound, result.Error)
 		return
 	}
-	c.JSON(http.StatusOK, todos)
+	pagination.Items = todos
+	c.JSON(http.StatusOK, pagination)
 }
 
 func (t *TodoController) GetTodo(c *gin.Context) {
