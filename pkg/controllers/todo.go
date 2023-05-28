@@ -49,7 +49,7 @@ func (t *TodoController) GetTodo(c *gin.Context) {
 	if err != nil {
 		todo, found = helpers.GetObjectOr404(id, t.DB, c)
 		if found {
-			caches.Set("todo:id:"+id, todo)
+			go caches.Set("todo:id:"+id, todo)
 		} else {
 			return
 		}
@@ -76,7 +76,7 @@ func (t *TodoController) CreateTodo(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, result.Error)
 		return
 	}
-	caches.Set("todo:id:"+strconv.Itoa(int(todo.ID)), todo)
+	go caches.Set("todo:id:"+strconv.Itoa(int(todo.ID)), todo)
 	c.JSON(http.StatusOK, todo)
 }
 
@@ -93,7 +93,7 @@ func (t *TodoController) UpdateTodo(c *gin.Context) {
 		return
 
 	}
-	caches.Set("todo:id:"+id, todo)
+	go caches.Set("todo:id:"+id, todo)
 	c.JSON(http.StatusOK, todo)
 }
 
