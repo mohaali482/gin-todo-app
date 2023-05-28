@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mohaali482/todo/pkg/caches"
 	"github.com/mohaali482/todo/pkg/errors"
 	"github.com/mohaali482/todo/pkg/helpers"
 	"github.com/mohaali482/todo/pkg/models"
@@ -42,8 +43,19 @@ func (t *TodoController) GetAllTodos(c *gin.Context) {
 
 func (t *TodoController) GetTodo(c *gin.Context) {
 	var todo models.Todo
+	var found bool = false
 	id := c.Param("id")
-	todo, found := helpers.GetObjectOr404(id, t.DB, c)
+	err := caches.Get("todo:id:"+id, &todo)
+	if err != nil {
+		todo, found = helpers.GetObjectOr404(id, t.DB, c)
+		if found {
+			caches.Set("todo:id:"+id, todo)
+		} else {
+			return
+		}
+	} else {
+		found = true
+	}
 	if !found {
 		return
 	}
@@ -64,6 +76,7 @@ func (t *TodoController) CreateTodo(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, result.Error)
 		return
 	}
+	caches.Set("todo:id:"+strconv.Itoa(int(todo.ID)), todo)
 	c.JSON(http.StatusOK, todo)
 }
 
@@ -80,6 +93,7 @@ func (t *TodoController) UpdateTodo(c *gin.Context) {
 		return
 
 	}
+	caches.Set("todo:id:"+id, todo)
 	c.JSON(http.StatusOK, todo)
 }
 
@@ -94,5 +108,6 @@ func (t *TodoController) DeleteTodo(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, result.Error)
 		return
 	}
+	caches.Delete("todo:id:" + id)
 	c.JSON(http.StatusOK, gin.H{"message": "Todo deleted successfully"})
 }
