@@ -27,17 +27,33 @@ func (t *TodoController) GetAllTodos(c *gin.Context) {
 	if e != nil {
 		page = 1
 	}
-	pagination.Limit = limit
-	pagination.Page = page
+	err := caches.Get("todo:limit:"+strconv.Itoa(limit)+":page:"+strconv.Itoa(page)+":items", &todos)
+	if err != nil {
+		pagination.Limit = limit
+		pagination.Page = page
 
-	// result := t.DB.Find(&todos)
-	result := t.DB.Scopes(helpers.Paginate(todos, &pagination, t.DB)).Find(&todos)
+		// result := t.DB.Find(&todos)
+		result := t.DB.Scopes(helpers.Paginate(todos, &pagination, t.DB)).Find(&todos)
 
-	if result.Error != nil {
-		c.AbortWithError(http.StatusNotFound, result.Error)
-		return
+		if result.Error != nil {
+			c.AbortWithError(http.StatusNotFound, result.Error)
+			return
+		}
+		pagination.Items = todos
+		go caches.Set("todo:limit:"+strconv.Itoa(limit)+":page:"+strconv.Itoa(page)+":items", todos)
+		go caches.Set("todo:limit:"+strconv.Itoa(limit)+":page:"+strconv.Itoa(page)+":count", pagination.Count)
+		go caches.Set("todo:limit:"+strconv.Itoa(limit)+":page:"+strconv.Itoa(page)+":total_pages", pagination.TotalPages)
+	} else {
+		var total_pages int
+		var count int64
+		caches.Get("todo:limit:"+strconv.Itoa(limit)+":page:"+strconv.Itoa(page)+":count", &count)
+		caches.Get("todo:limit:"+strconv.Itoa(limit)+":page:"+strconv.Itoa(page)+":total_pages", &total_pages)
+		pagination.Count = count
+		pagination.TotalPages = total_pages
+		pagination.Limit = limit
+		pagination.Page = page
+		pagination.Items = todos
 	}
-	pagination.Items = todos
 	c.JSON(http.StatusOK, pagination)
 }
 
@@ -59,7 +75,6 @@ func (t *TodoController) GetTodo(c *gin.Context) {
 	if !found {
 		return
 	}
-
 	c.JSON(http.StatusOK, todo)
 }
 
@@ -76,6 +91,7 @@ func (t *TodoController) CreateTodo(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, result.Error)
 		return
 	}
+	go caches.DeleteAllTodoCache()
 	go caches.Set("todo:id:"+strconv.Itoa(int(todo.ID)), todo)
 	c.JSON(http.StatusOK, todo)
 }
@@ -93,6 +109,7 @@ func (t *TodoController) UpdateTodo(c *gin.Context) {
 		return
 
 	}
+	go caches.DeleteAllTodoCache()
 	go caches.Set("todo:id:"+id, todo)
 	c.JSON(http.StatusOK, todo)
 }
@@ -108,6 +125,6 @@ func (t *TodoController) DeleteTodo(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, result.Error)
 		return
 	}
-	caches.Delete("todo:id:" + id)
+	go caches.DeleteAllTodoCache()
 	c.JSON(http.StatusOK, gin.H{"message": "Todo deleted successfully"})
 }
